@@ -1,0 +1,174 @@
+/*
+***********************************************************************
+***********************************************************************
+ *           
+ *           **********      **********     **********
+ *           **********      **********     **********
+ *           **                  **         **
+ *           **                  **         **
+ *           **   *****          **         **********
+ *           **   *****          **         **********
+ *           **      **          **         ** 
+ *           **      **          **         **
+ *           **********  **  ********** **  **********
+ *           **********  **  ********** **  **********
+ *               GRUPO DE INNOVACIÓN EDUCATIVA
+************************************************************************ 
+************************************************************************
+                    ESTACIÓN METEOROLÓGICA
+     ESTE PROYECTO HA SIDO REALIZADO PARA EL PROYECTO GLOBE - CLIMA
+                FEBRERO - MARZO y ABRIL DE 2016
+            Modificado por Wilmer Luis Marrero para el GIE
+                        Céfiro Educa 2017
+*/
+/*Sensor de Temperatura y Humedad DHTxx y BMP180 en Display LCD
+ * Instrucciones:
+Recuerda descargar las librerias DHT y BMP para poder utilizar este sensor
+así como la librería de la LCD
+Conectaremos el Sensor DHTxx a 5v y el pin de señal a la entrada digital 6
+que corresponde al pin 8 de la shield de protoboard
+*OJO* Utilizaremos un Display LCD controlado mediante un Modulo Serial I2C
+*/
+
+////////Incluimos las librerias necesarias////////// 
+#include <SFE_BMP180.h> // Incluímos las librerías del sensor de presión / altura
+#include <Wire.h>                  
+#include <LiquidCrystal_I2C.h> //Incluimos la libreria de la LCD    
+LiquidCrystal_I2C lcd(0x27, 16, 2);//Direccion de LCD
+//Si la pantalla se ve con cuadrados en blanco, es porque la I2C Adress no es la correcta
+//y tendremos que cambiar 0x3F por 0x27 por ejemplo
+#include "DHT.h" //Incorporamos la librería DHT encargada de leer humedad y temperatura
+
+/////////Definimos las variables///////// 
+#define DHTPIN D6 //Definimos el pin donde se conecta el data del sensor DHT
+#define DHTTYPE DHT22      // Si el sensor que estamos usando es el DHT 22
+//#define DHTTYPE DHT11   // Si el sensor que estamos usando es el DHT 11
+DHT dht(DHTPIN, DHTTYPE);
+SFE_BMP180 pressure;
+
+//Se declaran las variables. Es necesario tomar en cuenta una presión inicial
+//esta será la presión que se tome en cuenta en el cálculo de la diferencia de altura
+double PresionBase;
+//Leeremos presión y temperatura. Calcularemos la diferencia de altura
+double Presion = 0;
+double Altura = 0;
+double Temperatura = 0;
+char status;
+
+void setup() {
+  Serial.begin(9600);
+  lcd.init();// INICIAMOS LCD
+  lcd.backlight(); // HABILITA EL BACKLIGHT (LUZ DE FONDO)
+  lcd.print("Leyendo sensores");
+  dht.begin();
+  //Se inicia el sensor y se hace una lectura inicial
+  SensorStart();
+}
+
+void loop() {
+int err;
+       float temp=dht.readTemperature();
+       float hum=dht.readHumidity();
+       
+       if (isnan(hum)||isnan(temp)){
+         Serial.print("error de lectura");
+         return; }
+          lcd.clear();
+             lcd.setCursor(0,0);
+             lcd.print("Temp.: ");
+             lcd.print(temp);
+             lcd.print(" ");
+             lcd.print((char)223);
+             lcd.print("C");
+             lcd.setCursor(0,1);
+             lcd.print("Hdad: ");
+             lcd.print(hum);
+             lcd.print(" %");
+       
+       delay(3000);            //Recordad que solo lee una vez por segundo
+
+ReadSensor();
+lcd.clear();//Elimina todos los simbolos del LCD
+lcd.setCursor(0,0);//Posiciona la primera letra en fila 0 columna 0     
+//Se imprimen las variables
+lcd.print("Hrel.: ");
+lcd.print(Altura);
+lcd.print(" m");
+lcd.setCursor(0,1);
+lcd.print("P: ");
+lcd.print(Presion);
+lcd.print(" mbar");
+ 
+delay(3000);
+//Cada 3 segundos hará una nueva lectura
+}
+
+void SensorStart() {
+//Secuencia de inicio del sensor
+if (pressure.begin())
+Serial.println("BMP180 iniciado adecuadamente");
+else
+{
+Serial.println("La inicialización del sensor BMP180 falló");
+while (1);
+}
+//Se inicia la lectura de temperatura
+status = pressure.startTemperature();
+if (status != 0)  {
+delay(status);
+//Se lee una temperatura inicial
+status = pressure.getTemperature(Temperatura);
+if (status != 0)    {
+//Se inicia la lectura de presiones
+status = pressure.startPressure(3);
+if (status != 0)     
+{
+delay(status);
+//Se lee la presión inicial incidente sobre el sensor en la primera ejecución
+status = pressure.getPressure(PresionBase, Temperatura);
+}
+}
+}
+}
+
+void ReadSensor() {
+//En este método se hacen las lecturas de presión y temperatura y se calcula la altura
+//Se inicia la lectura de temperatura
+status = pressure.startTemperature();
+if (status != 0)
+{
+delay(status);
+//Se realiza la lectura de temperatura
+status = pressure.getTemperature(Temperatura);
+if (status != 0)
+{
+//Se inicia la lectura de presión
+status = pressure.startPressure(3);
+if (status != 0)
+{
+delay(status); //Pausa para que finalice la lectura
+
+//Se lleva a cabo la lectura de presión,
+//considerando la temperatura que afecta el desempeño del sensor
+status = pressure.getPressure(Presion, Temperatura);
+if (status != 0)
+{
+
+//Cálculo de la altura en base a la presión leída en el Setup
+Altura = pressure.altitude(Presion, PresionBase);
+}
+else Serial.println("Error en la lectura de presion\n");
+}
+else Serial.println("Error iniciando la lectura de presion\n");
+}
+else Serial.println("Error en la lectura de temperatura\n");
+}
+else Serial.println("Error iniciando la lectura de temperatura\n");
+
+
+///////////////////////////////////////////////////             
+lcd.clear();
+lcd.setCursor(2,0); //escribe en la primera linea después del caracter 2
+lcd.print("Cefiro Educa");                     
+  delay (2500);
+}
